@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pth
+*.pkl
+
+# Data and models (too large for git)
+backend/data/raw/
+backend/data/crops/
+backend/models/
+backend/evaluation/
+
+# Database
+backend/parking.db
+
+# Environment
+.env
+venv/
+.venv/
+
+# Node
+frontend/node_modules/
+frontend/dist/
+
+# OS
+.DS_Store
+Thumbs.db
