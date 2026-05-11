@@ -61,7 +61,7 @@ def _build_model() -> nn.Module:
 
 
 def _load_weights(model: nn.Module, path: Path) -> nn.Module:
-    checkpoint = torch.load(path, map_location=DEVICE)
+    checkpoint = torch.load(path, map_location=DEVICE, weights_only=False)
     if isinstance(checkpoint, dict):
         if "model_state" in checkpoint:
             state = checkpoint["model_state"]

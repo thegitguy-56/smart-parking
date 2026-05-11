@@ -15,6 +15,7 @@ GET /slots           slot map coordinates (for canvas overlay)
 
 import json
 import os
+import requests
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -34,6 +35,7 @@ BASE_DIR       = Path(__file__).resolve().parent.parent
 SLOT_MAP_PATH  = BASE_DIR / "data" / "raw" / "slot_map.json"
 FRAME_PATH     = BASE_DIR / "data" / "annotated_frame.jpg"
 IMAGE_DIR      = BASE_DIR / "data" / "raw" / "test"   # folder of PKLot images
+MODEL_DOWNLOAD_URL = "https://huggingface.co/rohanv56/smart-parking-detector/resolve/main/slot_classifier.pth"
 
 # ---------------------------------------------------------------------------
 # Shared state — loaded once at startup, reused across requests
@@ -51,6 +53,10 @@ _frame_index: int        = 0
 async def lifespan(app: FastAPI):
     """Load heavy objects once when the server starts."""
     global _detector, _predictor, _recommender, _image_list
+
+    # Ensure model file exists before initializing detector
+    model_path = BASE_DIR / "models" / "slot_classifier.pth"
+    ensure_model_exists(model_path)
 
     init_db()
 
@@ -275,3 +281,21 @@ def get_slots():
     with open(SLOT_MAP_PATH, "r") as f:
         data = json.load(f)
     return data
+
+# ---------------------------------------------------------------------------
+# Model download
+# ---------------------------------------------------------------------------
+def ensure_model_exists(model_path: Path) -> None:
+    """Download model from GitHub Releases if it doesn't exist."""
+    if model_path.exists():
+        return
+    
+    print(f"[Model] Downloading from {MODEL_DOWNLOAD_URL}...")
+    model_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    response = requests.get(MODEL_DOWNLOAD_URL, timeout=300)
+    response.raise_for_status()
+    
+    with open(model_path, 'wb') as f:
+        f.write(response.content)
+    print("[Model] Download complete ✓")
