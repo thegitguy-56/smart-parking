@@ -54,9 +54,10 @@ async def lifespan(app: FastAPI):
     """Load heavy objects once when the server starts."""
     global _detector, _predictor, _recommender, _image_list
 
-    # Ensure model file exists before initializing detector
+    # Refresh model from Hugging Face before initializing detector.
+    # If download fails but a local file exists, we continue with local.
     model_path = BASE_DIR / "models" / "slot_classifier.pth"
-    ensure_model_exists(model_path)
+    ensure_model_exists(model_path, force_download=True)
 
     init_db()
 
@@ -285,17 +286,24 @@ def get_slots():
 # ---------------------------------------------------------------------------
 # Model download
 # ---------------------------------------------------------------------------
-def ensure_model_exists(model_path: Path) -> None:
-    """Download model from GitHub Releases if it doesn't exist."""
-    if model_path.exists():
+def ensure_model_exists(model_path: Path, force_download: bool = False) -> None:
+    """Download model from Hugging Face; optionally overwrite existing local file."""
+    if model_path.exists() and not force_download:
         return
-    
+
     print(f"[Model] Downloading from {MODEL_DOWNLOAD_URL}...")
     model_path.parent.mkdir(parents=True, exist_ok=True)
-    
-    response = requests.get(MODEL_DOWNLOAD_URL, timeout=300)
-    response.raise_for_status()
-    
-    with open(model_path, 'wb') as f:
-        f.write(response.content)
-    print("[Model] Download complete ✓")
+
+    try:
+        with requests.get(MODEL_DOWNLOAD_URL, timeout=300, stream=True) as response:
+            response.raise_for_status()
+            with open(model_path, "wb") as f:
+                for chunk in response.iter_content(chunk_size=1024 * 1024):
+                    if chunk:
+                        f.write(chunk)
+        print("[Model] Download complete ✓")
+    except requests.RequestException as exc:
+        if model_path.exists():
+            print(f"[Model] Download failed, using local model: {exc}")
+            return
+        raise RuntimeError(f"Failed to download model and no local model found: {exc}") from exc
