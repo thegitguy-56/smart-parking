@@ -15,9 +15,10 @@ GET /slots           slot map coordinates (for canvas overlay)
 
 import json
 import os
-import requests
 from contextlib import asynccontextmanager
 from pathlib import Path
+from urllib.error import HTTPError, URLError
+from urllib.request import urlopen
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -295,14 +296,15 @@ def ensure_model_exists(model_path: Path, force_download: bool = False) -> None:
     model_path.parent.mkdir(parents=True, exist_ok=True)
 
     try:
-        with requests.get(MODEL_DOWNLOAD_URL, timeout=300, stream=True) as response:
-            response.raise_for_status()
+        with urlopen(MODEL_DOWNLOAD_URL, timeout=300) as response:
             with open(model_path, "wb") as f:
-                for chunk in response.iter_content(chunk_size=1024 * 1024):
-                    if chunk:
-                        f.write(chunk)
+                while True:
+                    chunk = response.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    f.write(chunk)
         print("[Model] Download complete ✓")
-    except requests.RequestException as exc:
+    except (HTTPError, URLError, TimeoutError, OSError) as exc:
         if model_path.exists():
             print(f"[Model] Download failed, using local model: {exc}")
             return
