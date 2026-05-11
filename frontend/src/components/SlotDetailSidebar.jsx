@@ -1,38 +1,31 @@
 // SlotDetailSidebar.jsx
-// Slides in from the right when the user clicks a slot on the map.
-// Shows:
-//   - Slot ID + occupied/free badge
-//   - Confidence score from the classifier
-//   - Bounding-box and centroid coordinates from slot_map.json
-//   - PredictionChart for that slot's vacancy forecast
+// Right sidebar shown when a slot is clicked on the map.
 //
 // Props:
-//   slot         — slot_id string, or null if none selected
-//   status       — object from fetchStatus(): { slots: { id: { occupied, confidence } } }
-//   slotMap      — object from fetchSlots(): { id: { bbox, centroid } }
-//   predictions  — object from fetchPredictions(): { id: [{ ds, vacancy_prob }] }
-//   onClose      — callback to deselect the slot
+//   slot         — slot_id string e.g. "slot_003", or null
+//   status       — normalized: { slots: { id: { occupied: bool, confidence: float } } }
+//   slotMap      — normalized: { id: { bbox: [x,y,w,h], centroid: [cx,cy] } }
+//   predictions  — normalized: { "slot_001": 0.73, ... }  (single float per slot)
+//   onClose      — callback to deselect
 
 import PredictionChart from "./PredictionChart";
 
 export default function SlotDetailSidebar({ slot, status, slotMap, predictions, onClose }) {
-  // If no slot is selected, render nothing.
-  // The parent controls width with a conditional class so the sidebar slides in/out.
   if (!slot) return null;
 
-  const slotStatus = status?.slots?.[slot];
-  const slotMeta   = slotMap?.[slot];
-  const forecast   = predictions?.[slot] ?? [];
+  const slotStatus   = status?.slots?.[slot];
+  const slotMeta     = slotMap?.[slot];
+  const vacancyProb  = predictions?.[slot];   // float or undefined
 
-  const occupied   = slotStatus?.occupied ?? null;
-  const confidence = slotStatus?.confidence ?? null;
-  const bbox       = slotMeta?.bbox;       // [x, y, w, h]
-  const centroid   = slotMeta?.centroid;   // [cx, cy]
+  const occupied     = slotStatus?.occupied ?? null;
+  const confidence   = slotStatus?.confidence ?? null;
+  const bbox         = slotMeta?.bbox;
+  const centroid     = slotMeta?.centroid;
 
   return (
     <aside className="w-72 min-w-[280px] flex flex-col bg-zinc-900 border-l border-zinc-700 overflow-y-auto">
 
-      {/* Header row */}
+      {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-700">
         <span className="font-mono text-sm text-zinc-200 font-bold tracking-wide">
           {slot}
@@ -42,7 +35,7 @@ export default function SlotDetailSidebar({ slot, status, slotMap, predictions, 
           className="text-zinc-500 hover:text-zinc-200 text-lg leading-none transition-colors"
           aria-label="Close sidebar"
         >
-          ×
+          x
         </button>
       </div>
 
@@ -66,7 +59,7 @@ export default function SlotDetailSidebar({ slot, status, slotMap, predictions, 
         )}
       </div>
 
-      {/* Spatial metadata */}
+      {/* Coordinates */}
       {slotMeta && (
         <div className="px-4 py-3 border-b border-zinc-700 space-y-1">
           <p className="text-[10px] uppercase tracking-widest text-zinc-500 font-medium mb-2">
@@ -81,17 +74,15 @@ export default function SlotDetailSidebar({ slot, status, slotMap, predictions, 
           {centroid && (
             <div className="flex justify-between text-xs font-mono text-zinc-400">
               <span className="text-zinc-600">Centroid</span>
-              <span>
-                ({Math.round(centroid[0])}, {Math.round(centroid[1])})
-              </span>
+              <span>({Math.round(centroid[0])}, {Math.round(centroid[1])})</span>
             </div>
           )}
         </div>
       )}
 
-      {/* Vacancy forecast chart */}
+      {/* Vacancy forecast */}
       <div className="px-4 py-4">
-        <PredictionChart data={forecast} slotId={slot} loading={false} />
+        <PredictionChart vacancyProb={vacancyProb} slotId={slot} />
       </div>
 
     </aside>

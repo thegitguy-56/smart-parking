@@ -1,91 +1,99 @@
 // api.js
-// All communication with the FastAPI backend lives here.
-// Change BASE_URL to your Render deployment URL before deploying to Vercel.
-
 const BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
-/**
- * GET /status
- * Returns:
- *   {
- *     slots: { "slot_id": { occupied: bool, confidence: float } },
- *     total: int,
- *     occupied: int,
- *     free: int
- *   }
- */
+// Normalize /status response.
+// Also passes through _frameIndex so App.jsx can avoid re-fetching the
+// frame image when the video has not advanced.
+function normalizeStatus(raw) {
+  const total    = (raw.occupied ?? 0) + (raw.empty ?? 0);
+  const occupied = raw.occupied ?? 0;
+  const free     = raw.empty   ?? 0;
+
+  const slots = {};
+  for (const [id, val] of Object.entries(raw.slots ?? {})) {
+    slots[id] = {
+      occupied:   val.status === "occupied",
+      confidence: val.confidence ?? 0,
+    };
+  }
+
+  return {
+    total,
+    occupied,
+    free,
+    slots,
+    _frameIndex: raw.frame_index ?? -1,   // used by App to skip redundant frame fetches
+  };
+}
+
+// Normalize /slots response.
+// Backend returns an array of { slot_id: int, x, y, w, h, cx, cy }.
+// We convert to { "slot_001": { bbox: [x,y,w,h], centroid: [cx,cy] } }
+// using zero-padded IDs to match /status keys.
+function normalizeSlots(raw) {
+  const result = {};
+  for (const s of raw.slots ?? []) {
+    const id = `slot_${String(s.slot_id).padStart(3, "0")}`;
+    result[id] = {
+      bbox:     [s.x, s.y, s.w, s.h],
+      centroid: [s.cx, s.cy],
+    };
+  }
+  return result;
+}
+
+// Normalize /predict response.
+// Backend returns { forecasts: [ { slot_id, vacancy_prob } ] }.
+// We convert to { "slot_001": 0.73, ... }.
+function normalizeForecasts(raw) {
+  const result = {};
+  for (const f of raw.forecasts ?? []) {
+    result[f.slot_id] = f.vacancy_prob;
+  }
+  return result;
+}
+
+// Normalize /recommend response.
+// Backend returns { recommendations: [...] }.
+function normalizeRecommendations(raw) {
+  return raw.recommendations ?? raw;
+}
+
+// ─── Exported API functions ───────────────────────────────────────────────────
+
 export async function fetchStatus() {
   const res = await fetch(`${BASE_URL}/status`);
   if (!res.ok) throw new Error(`/status failed: ${res.status}`);
-  return res.json();
+  return normalizeStatus(await res.json());
 }
 
-/**
- * GET /frame
- * Returns a JPEG blob — annotated parking lot image.
- * We return an object-URL string so an <img> can display it directly.
- */
 export async function fetchFrame() {
   const res = await fetch(`${BASE_URL}/frame`);
   if (!res.ok) throw new Error(`/frame failed: ${res.status}`);
-  const blob = await res.blob();
-  return URL.createObjectURL(blob);
+  return URL.createObjectURL(await res.blob());
 }
 
-/**
- * GET /predict?horizon=<minutes>
- * Returns:
- *   {
- *     "slot_id": [
- *       { ds: "2024-...", vacancy_prob: float },
- *       ...
- *     ]
- *   }
- */
 export async function fetchPredictions(horizon = 30) {
   const res = await fetch(`${BASE_URL}/predict?horizon=${horizon}`);
   if (!res.ok) throw new Error(`/predict failed: ${res.status}`);
-  return res.json();
+  return normalizeForecasts(await res.json());
 }
 
-/**
- * GET /recommend?entry_x=&entry_y=&horizon=&top_n=3
- * Returns:
- *   [
- *     { slot_id: str, score: float, distance: float, vacancy_prob: float },
- *     ...
- *   ]
- */
 export async function fetchRecommendations(entryX = 0, entryY = 0, horizon = 30, topN = 3) {
-  const params = new URLSearchParams({
-    entry_x: entryX,
-    entry_y: entryY,
-    horizon,
-    top_n: topN,
-  });
+  const params = new URLSearchParams({ entry_x: entryX, entry_y: entryY, horizon, top_n: topN });
   const res = await fetch(`${BASE_URL}/recommend?${params}`);
   if (!res.ok) throw new Error(`/recommend failed: ${res.status}`);
-  return res.json();
+  return normalizeRecommendations(await res.json());
 }
 
-/**
- * GET /history
- * Returns array of occupancy log rows:
- *   [{ timestamp: str, slot_id: str, occupied: int }, ...]
- */
 export async function fetchHistory() {
   const res = await fetch(`${BASE_URL}/history`);
   if (!res.ok) throw new Error(`/history failed: ${res.status}`);
   return res.json();
 }
 
-/**
- * GET /slots
- * Returns slot map:
- *   { "slot_id": { bbox: [x,y,w,h], centroid: [cx,cy] } }
- */
 export async function fetchSlots() {
   const res = await fetch(`${BASE_URL}/slots`);
   if (!res.ok) throw new Error(`/slots failed: ${res.status}`);
-  return res.json();
+  return normalizeSlots(await res.json());
 }
