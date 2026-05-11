@@ -1,0 +1,14 @@
+/* index.css */
+/* These three @tailwind directives are required by Tailwind.
+   Vite's PostCSS integration expands them into the full Tailwind stylesheet. */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Reset: make the body and root fill the viewport with a dark background.
+   This prevents a flash of white before React mounts. */
+html, body, #root {
+  height: 100%;
+  background-color: #09090b; /* zinc-950 */
+}
