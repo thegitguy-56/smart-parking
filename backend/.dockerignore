@@ -1,0 +1,15 @@
+# Ignore virtual environments
+venv/
+env/
+.venv/
+__pycache__/
+*.pyc
+
+# Ignore heavy training datasets and large test datasets
+data/raw/train/
+data/raw/val/
+data/raw/valid/
+
+# Ignore local database states (optional, but good practice so HF starts fresh)
+parking.db
+smart_parking.db

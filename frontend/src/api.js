@@ -86,9 +86,16 @@ export async function fetchRecommendations(entryX = 0, entryY = 0, horizon = 30,
   return normalizeRecommendations(await res.json());
 }
 
-export async function fetchHistory() {
-  const res = await fetch(`${BASE_URL}/history`);
+export async function fetchHistory(limit = 500, offset = 0) {
+  const params = new URLSearchParams({ limit, offset });
+  const res = await fetch(`${BASE_URL}/history?${params}`);
   if (!res.ok) throw new Error(`/history failed: ${res.status}`);
+  return res.json();
+}
+
+export async function fetchAnalytics() {
+  const res = await fetch(`${BASE_URL}/analytics`);
+  if (!res.ok) throw new Error(`/analytics failed: ${res.status}`);
   return res.json();
 }
 

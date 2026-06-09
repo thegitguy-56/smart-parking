@@ -24,7 +24,7 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 
-from src.database import get_full_history, get_latest_occupancy, init_db
+from src.database import get_full_history, get_latest_occupancy, get_analytics_summary, init_db
 from src.detector import Detector
 from src.predictor import Predictor
 from src.recommender import Recommender
@@ -36,7 +36,7 @@ BASE_DIR       = Path(__file__).resolve().parent.parent
 SLOT_MAP_PATH  = BASE_DIR / "data" / "raw" / "slot_map.json"
 FRAME_PATH     = BASE_DIR / "data" / "annotated_frame.jpg"
 IMAGE_DIR      = BASE_DIR / "data" / "raw" / "test"   # folder of PKLot images
-MODEL_DOWNLOAD_URL = "https://huggingface.co/rohanv56/smart-parking-detector/resolve/main/slot_classifier.pth"
+MODEL_DOWNLOAD_URL = "https://huggingface.co/rohanv56/smart-parking-detector-bucket/resolve/main/slot_classifier.pth"
 
 # ---------------------------------------------------------------------------
 # Shared state — loaded once at startup, reused across requests
@@ -58,7 +58,7 @@ async def lifespan(app: FastAPI):
     # Refresh model from Hugging Face before initializing detector.
     # If download fails but a local file exists, we continue with local.
     model_path = BASE_DIR / "models" / "slot_classifier.pth"
-    ensure_model_exists(model_path, force_download=True)
+    ensure_model_exists(model_path, force_download=False)
 
     init_db()
 
@@ -241,9 +241,16 @@ def get_recommend(
 # GET /history
 # ---------------------------------------------------------------------------
 @app.get("/history")
-def get_history():
+def get_history(
+    limit: int = Query(default=500, ge=1, le=5000),
+    offset: int = Query(default=0, ge=0),
+):
     """
-    Return the full occupancy log for charting.
+    Return a paginated slice of the occupancy log for charting.
+
+    Query params:
+        limit  — rows per page (default 500, max 5000)
+        offset — skip this many rows from the start
 
     Response shape:
     {
@@ -255,8 +262,33 @@ def get_history():
       ]
     }
     """
-    records = get_full_history()
+    records = get_full_history(limit=limit, offset=offset)
     return {"count": len(records), "records": records}
+
+
+# ---------------------------------------------------------------------------
+# GET /analytics
+# ---------------------------------------------------------------------------
+@app.get("/analytics")
+def get_analytics():
+    """
+    Return aggregated statistics from the occupancy log.
+    This avoids sending tens of thousands of raw rows to the frontend.
+
+    Response shape:
+    {
+      "total_readings": 72000,
+      "avg_occupancy_pct": 73.2,
+      "peak_hour": 14,
+      "busiest_slot": "slot_042",
+      "hourly_trend": [
+        {"hour": "2024-01-01T10:00", "occupied": 74, "empty": 26},
+        ...
+      ]
+    }
+    """
+    from src.database import get_analytics_summary
+    return get_analytics_summary()
 
 
 # ---------------------------------------------------------------------------
